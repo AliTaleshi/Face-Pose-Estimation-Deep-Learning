@@ -1,0 +1,130 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# PyTorch and training specific
+*.pth
+*.pkl
+*.pt
+*.bin
+*.onnx
+*.engine  # TensorRT
+checkpoints/
+runs/  # Common directory for training logs
+output/  # Your training outputs
+results/
+
+# Dataset files (avoid uploading large datasets)
+datasets/
+data/
+*.jpg
+*.jpeg
+*.png
+*.mat
+*.npy
+*.npz
+*.h5
+*.hdf5
+*.tfrecords
+
+# Environment and virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Python packaging and distribution
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Logs
+*.log
+logs/
+
+# Profiling data
+.prof
+
+# MLFlow/Weights & Biases
+mlruns/
+wandb/
+
+# Exceptions (you might want to keep these)
+!datasets/.gitkeep
+!data/.gitkeep
+
+# Keep the directory structure but ignore contents
+datasets/*
+!datasets/.gitkeep
+
+# Custom: Keep your small npy index files but not large data
+!*.npy  # This keeps your train_filename_all.npy etc.
+!*.txt  # Keep any text config files
+
+# Training configuration files that should be tracked
+!config*.yaml
+!config*.json
+
+# Keep your requirement files
+!requirements.txt
+!setup.py
+
+# Keep your source code
+!*.py
+
+# Keep your README and documentation
+!README.md
+!LICENSE
+!*.pdf
+!*.md
