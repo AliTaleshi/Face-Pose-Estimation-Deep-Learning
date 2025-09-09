@@ -17,18 +17,24 @@ runs/  # Common directory for training logs
 output/  # Your training outputs
 results/
 
-# Dataset files (avoid uploading large datasets)
-datasets/
-data/
-*.jpg
-*.jpeg
-*.png
-*.mat
-*.npy
-*.npz
-*.h5
-*.hdf5
-*.tfrecords
+# Dataset files - keep directory structure but ignore contents
+datasets/*/
+datasets/*.*
+datasets/*.jpg
+datasets/*.jpeg
+datasets/*.png
+datasets/*.mat
+datasets/*.npy
+datasets/*.npz
+datasets/*.h5
+datasets/*.hdf5
+datasets/*.tfrecords
+
+# But keep the directory structure and placeholder
+!datasets/
+!datasets/**/
+datasets/**/*
+!datasets/.gitkeep
 
 # Environment and virtual environments
 .env
@@ -100,15 +106,7 @@ logs/
 mlruns/
 wandb/
 
-# Exceptions (you might want to keep these)
-!datasets/.gitkeep
-!data/.gitkeep
-
-# Keep the directory structure but ignore contents
-datasets/*
-!datasets/.gitkeep
-
-# Custom: Keep your small npy index files but not large data
+# Keep your small npy index files but not large data
 !*.npy  # This keeps your train_filename_all.npy etc.
 !*.txt  # Keep any text config files
 
