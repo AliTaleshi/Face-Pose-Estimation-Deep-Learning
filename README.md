@@ -24,7 +24,6 @@ It supports training, evaluation, and inference from **images**.
 ├── train_hopenet.py      # Training script
 ├── test_hopenet.py       # Evaluation & metrics
 ├── image_inference.py    # Run inference on images
-├── webcam_inference.py   # Run inference on live webcam feed
 ├── datasets.py           # Dataset loaders (300W-LP, AFLW2000)
 ├── hopenet.py            # Hopenet model definition
 ├── util/
