@@ -66,7 +66,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def compute_metrics(yaw_errors, pitch_errors, roll_errors):
-    """Compute and print MAE, RMSE, and STD metrics."""
     yaw_mae = np.mean(yaw_errors)
     pitch_mae = np.mean(pitch_errors)
     roll_mae = np.mean(roll_errors)
@@ -101,7 +100,6 @@ def generate_plots(yaw_errors, pitch_errors, roll_errors,
     plots_path = os.path.join(output_dir, "plots")
     os.makedirs(plots_path, exist_ok=True)
 
-    # 1. Error Distribution Histograms
     plt.figure(figsize=(15, 5))
     plt.subplot(1, 3, 1)
     plt.hist(yaw_errors, bins=50, color='skyblue', edgecolor='black')
@@ -119,8 +117,7 @@ def generate_plots(yaw_errors, pitch_errors, roll_errors,
     plt.savefig(os.path.join(plots_path, "error_histograms.png"))
     plt.close()
 
-    # 2. Cumulative Error Distribution (CED)
-    thresholds = np.arange(0, 31, 1)  # up to 30 deg
+    thresholds = np.arange(0, 31, 1)
     def ced_curve(errors): return [np.mean(np.array(errors) < t) * 100 for t in thresholds]
 
     plt.figure()
@@ -133,7 +130,6 @@ def generate_plots(yaw_errors, pitch_errors, roll_errors,
     plt.savefig(os.path.join(plots_path, "cumulative_error_distribution.png"))
     plt.close()
 
-    # 3. Predicted vs True Scatter Plots
     plt.figure(figsize=(15, 5))
     plt.subplot(1, 3, 1)
     plt.scatter(yaw_labels, yaw_preds, alpha=0.5, c="skyblue")

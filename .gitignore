@@ -106,9 +106,8 @@ logs/
 mlruns/
 wandb/
 
-# Keep your small npy index files but not large data
-!*.npy  # This keeps your train_filename_all.npy etc.
-!*.txt  # Keep any text config files
+*.npy  
+*.txt
 
 # Training configuration files that should be tracked
 !config*.yaml

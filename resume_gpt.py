@@ -128,6 +128,21 @@ def update_loss_history(losses_lists, l_cross_yaw, l_cross_pitch, l_cross_roll, 
     losses_lists[8].append(l_yaw)
     
     return losses_lists
+
+def save_checkpoint(state, filename):
+    torch.save(state, filename)
+    print(f"Checkpoint saved to {filename}")
+
+def load_checkpoint(model, optimizer, filename, device):
+    checkpoint = torch.load(filename, map_location=device)
+    model.load_state_dict(checkpoint['model_state'])
+    optimizer.load_state_dict(checkpoint['optimizer_state'])
+    start_epoch = checkpoint['epoch']
+    best_loss = checkpoint['best_loss']
+    train_loss_history = checkpoint['train_loss_history']
+    val_loss_history = checkpoint['val_loss_history']
+    print(f"Checkpoint loaded from {filename}, resuming from epoch {start_epoch+1}")
+    return model, optimizer, start_epoch, best_loss, train_loss_history, val_loss_history
         
 if __name__ == '__main__':
     args = parse_args()
@@ -241,16 +256,31 @@ if __name__ == '__main__':
     
     
     ##########################################
+    ##       Checkpoint Resume Logic        ##
+    ##########################################
+    start_epoch = 0
+    checkpoint_path = os.path.join(output_dir, "output", "snapshots", "latest_checkpoint.pth")
+    if os.path.exists(checkpoint_path):
+        print(f"Resuming training from checkpoint: {checkpoint_path}")
+        checkpoint = torch.load(checkpoint_path, map_location=f"cuda:{gpu}")
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        start_epoch = checkpoint['epoch'] + 1
+        best_loss = checkpoint['best_loss']
+        print(f"Resumed from epoch {start_epoch}, best loss so far: {best_loss}")
+    else:
+        best_loss = np.inf
+        print("No checkpoint found, starting fresh training.")
+
+
+    ##########################################
     ##              Training                ##
     ##########################################
     print('Ready to train network.')
     train_loss_history_lists = reset_loss_history()
     val_loss_history_lists = reset_loss_history()
-    
-    best_loss = np.inf
-    best_epoch = 0
-    for epoch in range(num_epochs):
 
+    for epoch in range(start_epoch, num_epochs):
         train_loss_lists = reset_loss_history()
 
         for i, (images, labels, cont_labels, name) in enumerate(train_loader):
@@ -302,7 +332,7 @@ if __name__ == '__main__':
             if (i+1) % 1000 == 0:
                 print('Epoch [%d/%d], Iter [%d/%d] Losses: Yaw %.4f, Pitch %.4f, Roll %.4f'
                        %(epoch+1, num_epochs, i+1, len(pose_dataset_train)//batch_size, np.mean(train_loss_lists[6]), np.mean(train_loss_lists[7]), np.mean(train_loss_lists[8])))
-        
+
         train_loss_history_lists = update_loss_history(train_loss_history_lists, np.mean(train_loss_lists[0]), np.mean(train_loss_lists[1]),\
                             np.mean(train_loss_lists[2]), np.mean(train_loss_lists[3]), np.mean(train_loss_lists[4]), np.mean(train_loss_lists[5]),\
                             np.mean(train_loss_lists[6]), np.mean(train_loss_lists[7]), np.mean(train_loss_lists[8]))
@@ -374,6 +404,14 @@ if __name__ == '__main__':
         if not os.path.exists(output_dir + '/output/snapshots/'):
             os.mkdir(output_dir + '/output/snapshots/')
             
+        # Save latest checkpoint every epoch
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'best_loss': best_loss
+        }, checkpoint_path)
+
         if epoch % 1 == 0 and epoch < num_epochs:
             print('Taking snapshot...')
             torch.save(model.state_dict(), output_dir +

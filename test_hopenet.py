@@ -33,7 +33,6 @@ def parse_args():
           default=1, type=int)
     parser.add_argument('--save_viz', dest='save_viz', help='Save images with pose cube.',
           default=False, type=bool)
-    parser.add_argument('--dataset', dest='dataset', help='Dataset type.', default='AFLW2000', type=str)
     parser.add_argument('--output_dir', dest='output_dir', help='Path to output_dir',
           default='', type=str)
 
@@ -66,14 +65,8 @@ if __name__ == '__main__':
     transforms.CenterCrop(224), transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
 
-    if args.dataset == 'Pose_300W_LP':
-        pose_dataset = datasets.Pose_300W_LP(args.data_dir, num_bins, args.filename_list, transformations)
-    elif args.dataset == 'AFLW2000':
-        test_filename_list = os.path.join(args.filename_list ,'test_filename.npy')
-        pose_dataset = datasets.AFLW2000(args.data_dir, num_bins, test_filename_list, transformations)
-    else:
-        print('Error: not a valid dataset name')
-        sys.exit()
+    test_filename_list = os.path.join(args.filename_list ,'test_filename.npy')
+    pose_dataset = datasets.AFLW2000(args.data_dir, num_bins, test_filename_list, transformations)
 
     test_loader = torch.utils.data.DataLoader(dataset=pose_dataset,
                                                batch_size=args.batch_size,

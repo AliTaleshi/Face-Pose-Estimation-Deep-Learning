@@ -33,7 +33,6 @@ def parse_args():
           default=1, type=int)
     parser.add_argument('--save_viz', dest='save_viz', help='Save images with pose cube.',
           default=False, type=bool)
-    parser.add_argument('--dataset', dest='dataset', help='Dataset type.', default='AFLW2000', type=str)
     parser.add_argument('--output_dir', dest='output_dir', help='Path to output_dir',
           default='', type=str)
 
@@ -49,7 +48,6 @@ if __name__ == '__main__':
     if not os.path.exists(output_path):
         os.mkdir(output_path)
 
-    # NEW: make a subfolder for plots
     plots_path = os.path.join(output_path, "plots")
     os.makedirs(plots_path, exist_ok=True)
     
@@ -58,7 +56,7 @@ if __name__ == '__main__':
     model = hopenet.Hopenet(torchvision.models.resnet.Bottleneck, [3, 4, 6, 3], num_bins)
     
     print('Loading snapshot.')
-    saved_state_dict = torch.load(snapshot_path)
+    saved_state_dict = torch.load(snapshot_path, weights_only=True)
     model.load_state_dict(saved_state_dict)
     model.cuda(gpu)
 
@@ -67,19 +65,12 @@ if __name__ == '__main__':
     transforms.CenterCrop(224), transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
 
-    if args.dataset == 'Pose_300W_LP':
-        pose_dataset = datasets.Pose_300W_LP(args.data_dir, num_bins, args.filename_list, transformations)
-    elif args.dataset == 'AFLW2000':
-        test_filename_list = os.path.join(args.filename_list ,'test_filename.npy')
-        pose_dataset = datasets.AFLW2000(args.data_dir, num_bins, test_filename_list, transformations)
-    else:
-        print('Error: not a valid dataset name')
-        sys.exit()
+    test_filename_list = os.path.join(args.filename_list ,'test_filename.npy')
+    pose_dataset = datasets.AFLW2000(args.data_dir, num_bins, test_filename_list, transformations)
 
     test_loader = torch.utils.data.DataLoader(dataset=pose_dataset,
                                                batch_size=args.batch_size,
                                                num_workers=4)
-
     print('Ready to test network.')
     model.eval()
     total = 0
@@ -91,10 +82,8 @@ if __name__ == '__main__':
     pitch_error = .0
     roll_error = .0
 
-    # FIXED: updated to avoid deprecation warning
     l1loss = torch.nn.L1Loss(reduction='sum')
 
-    # NEW: containers for metrics and plots
     yaw_errors_list, pitch_errors_list, roll_errors_list = [], [], []
     yaw_preds_list, pitch_preds_list, roll_preds_list = [], [], []
     yaw_labels_list, pitch_labels_list, roll_labels_list = [], [], []
@@ -128,7 +117,6 @@ if __name__ == '__main__':
         roll_err = torch.sum(torch.abs(roll_predicted - label_roll))
         roll_error += roll_err
 
-        # NEW: store per-sample errors and predictions
         yaw_errors_list.extend(torch.abs(yaw_predicted - label_yaw).numpy())
         pitch_errors_list.extend(torch.abs(pitch_predicted - label_pitch).numpy())
         roll_errors_list.extend(torch.abs(roll_predicted - label_roll).numpy())
@@ -147,10 +135,8 @@ if __name__ == '__main__':
 
         if args.save_viz:
             name = name[0].split('.')[0]
-            if args.dataset == 'BIWI':
-                cv2_img = cv2.imread(os.path.join(args.data_dir, name + '_rgb.png'))
-            else:
-                cv2_img = cv2.imread(os.path.join(args.data_dir, name + '.jpg'))
+            cv2_img = cv2.imread(os.path.join(args.data_dir, name + '.jpg'))
+            
             if args.batch_size == 1:
                 error_string = 'y %.2f, p %.2f, r %.2f' % (torch.sum(torch.abs(yaw_predicted - label_yaw)), torch.sum(torch.abs(pitch_predicted - label_pitch)), torch.sum(torch.abs(roll_predicted - label_roll)))
                 cv2.putText(cv2_img, error_string, (30, cv2_img.shape[0]- 30), fontFace=1, fontScale=1, color=(0,0,255), thickness=2)
@@ -166,10 +152,8 @@ if __name__ == '__main__':
     ' test images. Yaw: %.4f, Pitch: %.4f, Roll: %.4f, total_error: %.4f' %( yaw_err,
     pitch_err, roll_err, total_err))
 
-    # Compute extra metrics
     metrics = utils.compute_metrics(yaw_errors_list, pitch_errors_list, roll_errors_list)
 
-    # Generate plots
     utils.generate_plots(yaw_errors_list, pitch_errors_list, roll_errors_list,
                          yaw_labels_list, pitch_labels_list, roll_labels_list,
                          yaw_preds_list, pitch_preds_list, roll_preds_list,

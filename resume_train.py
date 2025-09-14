@@ -36,6 +36,8 @@ def parse_args():
           default=2, type=float)
     parser.add_argument('--snapshot', dest='snapshot', help='Path of model snapshot.',
           default='', type=str)
+    parser.add_argument('--resume', dest='resume', help='Path to checkpoint to resume training from.',
+          default='', type=str)
     parser.add_argument('--output_dir', dest='output_dir', help='Path to output_dir',
           default='', type=str)
     parser.add_argument('--Loss_func', dest='Loss_func', help='Loss Function',
@@ -81,6 +83,80 @@ def load_filtered_state_dict(model, snapshot):
     model_dict.update(snapshot)
     model.load_state_dict(model_dict)
 
+def save_checkpoint(state, filename):
+    """Save training checkpoint with all necessary information"""
+    torch.save(state, filename)
+    print(f'Checkpoint saved to {filename}')
+
+def load_checkpoint(checkpoint_path, model, optimizer):
+    """Load training checkpoint and return start epoch and loss histories"""
+    print(f'Loading checkpoint from {checkpoint_path}')
+    checkpoint = torch.load(checkpoint_path)
+    
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    
+    start_epoch = checkpoint['epoch'] + 1  # Start from next epoch
+    train_loss_history = checkpoint.get('train_loss_history', [[] for _ in range(9)])
+    val_loss_history = checkpoint.get('val_loss_history', [[] for _ in range(9)])
+    best_loss = checkpoint.get('best_loss', np.inf)
+    best_epoch = checkpoint.get('best_epoch', 0)
+    
+    print(f'Resuming training from epoch {start_epoch}')
+    print(f'Previous best loss: {best_loss:.4f} at epoch {best_epoch + 1}')
+    print('✓ Model weights loaded')
+    print('✓ Optimizer state loaded')
+    print('✓ Loss history loaded')
+    print('✓ Training will continue seamlessly')
+    
+    return start_epoch, train_loss_history, val_loss_history, best_loss, best_epoch
+
+def load_model_weights_and_extract_epoch(model_path, model):
+    """Load model weights from .pkl file and extract epoch number from filename"""
+    print(f'Loading model weights from {model_path}')
+    saved_state_dict = torch.load(model_path)
+    model.load_state_dict(saved_state_dict)
+    
+    # Try to extract epoch number from filename
+    import re
+    epoch_match = re.search(r'epoch_(\d+)', model_path)
+    if epoch_match:
+        start_epoch = int(epoch_match.group(1))
+        print(f"Extracted epoch number: {start_epoch}")
+        print(f"Will resume training from epoch {start_epoch + 1}")
+        print('⚠️  Model weights loaded')
+        print('⚠️  Optimizer state RESET (new learning rate schedule)')
+        print('⚠️  Loss history RESET (plots will start fresh)')
+        return start_epoch
+    else:
+        print("Could not extract epoch number from filename, starting from epoch 0")
+        return 0
+
+def create_comprehensive_checkpoint(epoch, model, optimizer, train_loss_history, val_loss_history, 
+                                  best_loss, best_epoch, args, learning_rates=None):
+    """Create a comprehensive checkpoint with all training information"""
+    checkpoint = {
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'train_loss_history': train_loss_history,
+        'val_loss_history': val_loss_history,
+        'best_loss': best_loss,
+        'best_epoch': best_epoch,
+        'args': vars(args),  # Save all arguments
+        'learning_rates': learning_rates if learning_rates else [],
+        'model_architecture': {
+            'num_bins': args.num_bins,
+            'alpha': args.alpha,
+            'loss_func': args.Loss_func
+        },
+        'training_info': {
+            'total_epochs_completed': epoch + 1,
+            'remaining_epochs': args.num_epochs - epoch - 1
+        }
+    }
+    return checkpoint
+
 def log_results( train_loss,  val_loss, Log_dir, plotname, i ):
     if not os.path.exists(Log_dir):
         os.mkdir(Log_dir)    
@@ -124,8 +200,8 @@ def update_loss_history(losses_lists, l_cross_yaw, l_cross_pitch, l_cross_roll, 
     losses_lists[4].append(l_MSE_pitch)
     losses_lists[5].append(l_MSE_roll)
     losses_lists[6].append(l_yaw)
-    losses_lists[7].append(l_yaw)
-    losses_lists[8].append(l_yaw)
+    losses_lists[7].append(l_pitch)
+    losses_lists[8].append(l_roll)
     
     return losses_lists
         
@@ -149,13 +225,36 @@ if __name__ == '__main__':
 
     model = hopenet.Hopenet(torchvision.models.resnet.Bottleneck, [3, 4, 6, 3], num_bins)
     
-    if args.snapshot == '':
+    # Initialize optimizer here so it can be loaded with checkpoint
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    
+    # Initialize variables for resuming
+    start_epoch = 0
+    train_loss_history_lists = reset_loss_history()
+    val_loss_history_lists = reset_loss_history()
+    best_loss = np.inf
+    best_epoch = 0
+    
+    if args.resume != '':
+        # Check if it's a .pth checkpoint or .pkl model file
+        if args.resume.endswith('.pth'):
+            # Resume from full checkpoint
+            start_epoch, train_loss_history_lists, val_loss_history_lists, best_loss, best_epoch = \
+                load_checkpoint(args.resume, model, optimizer)
+        elif args.resume.endswith('.pkl'):
+            # Resume from model weights only - extract epoch number from filename
+            start_epoch = load_model_weights_and_extract_epoch(args.resume, model)
+            print("Note: Optimizer state and loss history will be reset (only model weights loaded)")
+        else:
+            print("Resume file must be either .pth (checkpoint) or .pkl (model weights)")
+    elif args.snapshot == '':
         print("Download completed, now loading model weights...")
         load_filtered_state_dict(model, model_zoo.load_url('https://download.pytorch.org/models/resnet50-19c8e357.pth'))
         print("Model weights loaded, now moving to GPU...")
     else:
         saved_state_dict = torch.load(args.snapshot)
         model.load_state_dict(saved_state_dict)
+    
     model.cuda(gpu)
     print("Model on GPU, now loading data...")
     
@@ -199,15 +298,15 @@ if __name__ == '__main__':
     
     if args.class_weight == 'balanced':
         class_weights_yaw = np.zeros((num_bins,))
-        class_weights_yaw[np.unique(yaw_l)] = compute_class_weight('balanced', np.unique(yaw_l), yaw_l)
+        class_weights_yaw[np.unique(yaw_l)] = compute_class_weight(class_weight='balanced', classes=np.unique(yaw_l), y=yaw_l)
         class_weights_yaw =  torch.FloatTensor(class_weights_yaw).cuda(gpu)
         
         class_weights_pitch = np.zeros((num_bins,))
-        class_weights_pitch[np.unique(pitch_l)] = compute_class_weight('balanced', np.unique(pitch_l), pitch_l)
+        class_weights_pitch[np.unique(pitch_l)] = compute_class_weight(class_weight='balanced', classes=np.unique(pitch_l), y=pitch_l)
         class_weights_pitch =  torch.FloatTensor(class_weights_pitch).cuda(gpu)
         
         class_weights_roll = np.zeros((num_bins,))
-        class_weights_roll[np.unique(roll_l)] = compute_class_weight('balanced', np.unique(roll_l), roll_l)
+        class_weights_roll[np.unique(roll_l)] = compute_class_weight(class_weight='balanced', classes=np.unique(roll_l), y=roll_l)
         class_weights_roll =  torch.FloatTensor(class_weights_roll).cuda(gpu)
 
     else:
@@ -236,20 +335,14 @@ if __name__ == '__main__':
     softmax = nn.Softmax().cuda(gpu)
     idx_tensor = [idx for idx in range(num_bins)]
     idx_tensor = Variable(torch.FloatTensor(idx_tensor)).cuda(gpu)
-    optimizer = torch.optim.Adam( model.parameters(),
-                                   lr = args.lr)
-    
     
     ##########################################
     ##              Training                ##
     ##########################################
     print('Ready to train network.')
-    train_loss_history_lists = reset_loss_history()
-    val_loss_history_lists = reset_loss_history()
+    print(f'Starting training from epoch {start_epoch + 1} to {num_epochs}')
     
-    best_loss = np.inf
-    best_epoch = 0
-    for epoch in range(num_epochs):
+    for epoch in range(start_epoch, num_epochs):
 
         train_loss_lists = reset_loss_history()
 
@@ -374,16 +467,37 @@ if __name__ == '__main__':
         if not os.path.exists(output_dir + '/output/snapshots/'):
             os.mkdir(output_dir + '/output/snapshots/')
             
+        # Save regular epoch checkpoint with comprehensive information
         if epoch % 1 == 0 and epoch < num_epochs:
             print('Taking snapshot...')
+            # Save model weights only (.pkl format for compatibility)
             torch.save(model.state_dict(), output_dir +
             '/output/snapshots/' + args.output_string + '_epoch_'+ str(epoch+1) + '.pkl')
+            
+            # Save comprehensive checkpoint (.pth format for full resuming)
+            comprehensive_checkpoint = create_comprehensive_checkpoint(
+                epoch, model, optimizer, train_loss_history_lists, val_loss_history_lists,
+                best_loss, best_epoch, args
+            )
+            save_checkpoint(comprehensive_checkpoint, output_dir + '/output/snapshots/' + 
+                          args.output_string + '_checkpoint_epoch_' + str(epoch+1) + '.pth')
 
         total_val_loss = val_loss_history_lists[6][-1] + val_loss_history_lists[7][-1] + val_loss_history_lists[8][-1] 
         if total_val_loss < best_loss:
             best_loss = total_val_loss
             best_epoch = epoch
+            print(f'New best model found! Loss: {best_loss:.4f}')
+            
+            # Save best model weights (.pkl format)
             torch.save(model.state_dict(), output_dir +
             '/output/snapshots/' + args.output_string + '_best_model' + '.pkl')
+            
+            # Save best comprehensive checkpoint (.pth format)
+            best_checkpoint = create_comprehensive_checkpoint(
+                epoch, model, optimizer, train_loss_history_lists, val_loss_history_lists,
+                best_loss, best_epoch, args
+            )
+            save_checkpoint(best_checkpoint, output_dir + '/output/snapshots/' + 
+                          args.output_string + '_best_checkpoint.pth')
 
     print('Finished !!!')
