@@ -36,9 +36,7 @@ def parse_args():
     parser.add_argument('--output_dir', dest='output_dir', help='Path to output_dir',
           default='', type=str)
 
-
     args = parser.parse_args()
-
     return args
 
 if __name__ == '__main__':
@@ -49,14 +47,16 @@ if __name__ == '__main__':
     output_path = os.path.join(os.getcwd(), args.output_dir ,'test_results')
     if not os.path.exists(output_path):
         os.mkdir(output_path)
+
+    plots_path = os.path.join(output_path, "plots")
+    os.makedirs(plots_path, exist_ok=True)
     
     num_bins = args.num_bins
-    
     
     model = hopenet.Hopenet(torchvision.models.resnet.Bottleneck, [3, 4, 6, 3], num_bins)
     
     print('Loading snapshot.')
-    saved_state_dict = torch.load(snapshot_path)
+    saved_state_dict = torch.load(snapshot_path, weights_only=True)
     model.load_state_dict(saved_state_dict)
     model.cuda(gpu)
 
@@ -71,8 +71,6 @@ if __name__ == '__main__':
     test_loader = torch.utils.data.DataLoader(dataset=pose_dataset,
                                                batch_size=args.batch_size,
                                                num_workers=4)
-
-    
     print('Ready to test network.')
     model.eval()
     total = 0
@@ -85,6 +83,10 @@ if __name__ == '__main__':
     roll_error = .0
 
     l1loss = torch.nn.L1Loss(reduction='sum')
+
+    yaw_errors_list, pitch_errors_list, roll_errors_list = [], [], []
+    yaw_preds_list, pitch_preds_list, roll_preds_list = [], [], []
+    yaw_labels_list, pitch_labels_list, roll_labels_list = [], [], []
 
     for i, (images, labels, cont_labels, name) in enumerate(test_loader):
         images = Variable(images).cuda(gpu)
@@ -114,6 +116,18 @@ if __name__ == '__main__':
         pitch_error += pitch_err
         roll_err = torch.sum(torch.abs(roll_predicted - label_roll))
         roll_error += roll_err
+
+        yaw_errors_list.extend(torch.abs(yaw_predicted - label_yaw).numpy())
+        pitch_errors_list.extend(torch.abs(pitch_predicted - label_pitch).numpy())
+        roll_errors_list.extend(torch.abs(roll_predicted - label_roll).numpy())
+
+        yaw_preds_list.extend(yaw_predicted.numpy())
+        pitch_preds_list.extend(pitch_predicted.numpy())
+        roll_preds_list.extend(roll_predicted.numpy())
+
+        yaw_labels_list.extend(label_yaw.numpy())
+        pitch_labels_list.extend(label_pitch.numpy())
+        roll_labels_list.extend(label_roll.numpy())
         
         if (i+1) % 10 == 0:
             print('Iter [%d/%d] MAE Error: Yaw %.4f   ||   Pitch %.4f  ||   Roll %.4f'
@@ -121,10 +135,8 @@ if __name__ == '__main__':
 
         if args.save_viz:
             name = name[0].split('.')[0]
-            if args.dataset == 'BIWI':
-                cv2_img = cv2.imread(os.path.join(args.data_dir, name + '_rgb.png'))
-            else:
-                cv2_img = cv2.imread(os.path.join(args.data_dir, name + '.jpg'))
+            cv2_img = cv2.imread(os.path.join(args.data_dir, name + '.jpg'))
+            
             if args.batch_size == 1:
                 error_string = 'y %.2f, p %.2f, r %.2f' % (torch.sum(torch.abs(yaw_predicted - label_yaw)), torch.sum(torch.abs(pitch_predicted - label_pitch)), torch.sum(torch.abs(roll_predicted - label_roll)))
                 cv2.putText(cv2_img, error_string, (30, cv2_img.shape[0]- 30), fontFace=1, fontScale=1, color=(0,0,255), thickness=2)
@@ -139,3 +151,10 @@ if __name__ == '__main__':
     print('Test error in degrees of the model on the ' + str(total) +
     ' test images. Yaw: %.4f, Pitch: %.4f, Roll: %.4f, total_error: %.4f' %( yaw_err,
     pitch_err, roll_err, total_err))
+
+    metrics = utils.compute_metrics(yaw_errors_list, pitch_errors_list, roll_errors_list)
+
+    utils.generate_plots(yaw_errors_list, pitch_errors_list, roll_errors_list,
+                         yaw_labels_list, pitch_labels_list, roll_labels_list,
+                         yaw_preds_list, pitch_preds_list, roll_preds_list,
+                         output_path)
