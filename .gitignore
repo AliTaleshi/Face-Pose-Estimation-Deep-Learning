@@ -36,6 +36,12 @@ datasets/*.tfrecords
 datasets/**/*
 !datasets/.gitkeep
 
+# Model output images path
+output/
+
+# Model input images path
+input/
+
 # Environment and virtual environments
 .env
 .venv

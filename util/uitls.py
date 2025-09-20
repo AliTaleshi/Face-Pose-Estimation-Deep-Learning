@@ -5,17 +5,12 @@ import scipy.io as sio
 import cv2
 import math
 from math import cos, sin
+import matplotlib.pyplot as plt
 
 def softmax_temperature(tensor, temperature):
     result = torch.exp(tensor / temperature)
     result = torch.div(result, torch.sum(result, 1).unsqueeze(1).expand_as(result))
     return result
-
-def get_pose_params_from_mat(mat_path):
-    mat = sio.loadmat(mat_path)
-    pre_pose_params = mat['Pose_Para'][0]
-    pose_params = pre_pose_params[:5]
-    return pose_params
 
 def get_ypr_from_mat(mat_path):
     mat = sio.loadmat(mat_path)
@@ -60,10 +55,6 @@ def draw_axis(img, yaw, pitch, roll, tdx=None, tdy=None, size = 100):
     cv2.line(img, (int(tdx), int(tdy)), (int(x3),int(y3)),(255,0,0),2)
 
     return img
-
-import os
-import numpy as np
-import matplotlib.pyplot as plt
 
 def compute_metrics(yaw_errors, pitch_errors, roll_errors):
     yaw_mae = np.mean(yaw_errors)

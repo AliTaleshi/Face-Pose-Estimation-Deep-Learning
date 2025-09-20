@@ -26,7 +26,7 @@ def parse_args():
     parser.add_argument('--batch_size', dest='batch_size', help='Batch size.',
           default=16, type=int)
     parser.add_argument('--lr', dest='lr', help='Base learning rate.',
-          default=0.001, type=float)
+          default=0.00001, type=float)
     parser.add_argument('--data_dir', dest='data_dir', help='Directory path for data.',
           default='', type=str)
     parser.add_argument('--filename_list', dest='filename_list', help='Path to text file containing relative paths for every example.',
@@ -49,31 +49,6 @@ def parse_args():
 
     args = parser.parse_args()
     return args
-
-def get_ignored_params(model):
-    b = [model.conv1, model.bn1, model.fc_finetune]
-    for i in range(len(b)):
-        for module_name, module in b[i].named_modules():
-            if 'bn' in module_name:
-                module.eval()
-            for name, param in module.named_parameters():
-                yield param
-
-def get_non_ignored_params(model):
-    b = [model.layer1, model.layer2, model.layer3, model.layer4]
-    for i in range(len(b)):
-        for module_name, module in b[i].named_modules():
-            if 'bn' in module_name:
-                module.eval()
-            for name, param in module.named_parameters():
-                yield param
-
-def get_fc_params(model):
-    b = [model.fc_yaw, model.fc_pitch, model.fc_roll]
-    for i in range(len(b)):
-        for module_name, module in b[i].named_modules():
-            for name, param in module.named_parameters():
-                yield param
 
 def load_filtered_state_dict(model, snapshot):
     model_dict = model.state_dict()
@@ -124,8 +99,8 @@ def update_loss_history(losses_lists, l_cross_yaw, l_cross_pitch, l_cross_roll, 
     losses_lists[4].append(l_MSE_pitch)
     losses_lists[5].append(l_MSE_roll)
     losses_lists[6].append(l_yaw)
-    losses_lists[7].append(l_yaw)
-    losses_lists[8].append(l_yaw)
+    losses_lists[7].append(l_pitch)
+    losses_lists[8].append(l_roll)
     
     return losses_lists
         
